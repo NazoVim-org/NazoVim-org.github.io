@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NazoVim — a neovim distribution</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@300;400;500&family=Fira+Code:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   CSS VARIABLES — Kanagawa Dragon
+   ============================================================ */
+:root {
+  --bg:       #181616;
+  --bg-dim:   #1d1b19;
+  --bg-card:  #1e1c1a;
+  --bg-deep:  #0d0b0b;
+  --border:   #2d2b29;
+  --border-hi:#3d3b39;
+  --fg:       #c5c9c5;
+  --fg-dim:   #8c8c8c;
+  --blue:     #7e9cd8;
+  --blue-dim: rgba(126,156,216,0.12);
+  --green:    #98bb6c;
+  --yellow:   #c0a36e;
+  --red:      #e46876;
+  --purple:   #957fb8;
+  --orange:   #ffa066;
+  --cyan:     #6a9589;
+  --white:    #dcd7ba;
+  --font-head: 'JetBrains Mono', monospace;
+  --font-body: 'IBM Plex Mono', monospace;
+  --font-code: 'Fira Code', monospace;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg);
+}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.6;
+}
+
+/* ============================================================
+   SCROLL PROGRESS BAR
+   ============================================================ */
+#progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  width: 0%;
+  background: linear-gradient(90deg, var(--blue), var(--purple));
+  z-index: 10000;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 8px var(--blue);
+}
+
+/* ============================================================
+   FOCUS
+   ============================================================ */
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ============================================================
+   REVEAL ANIMATION
+   ============================================================ */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.65s ease, transform 0.65s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ============================================================
+   NAV
+   ============================================================ */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: rgba(24,22,22,0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid transparent;
+  transition: padding 0.3s ease, border-color 0.3s ease;
+}
+nav.scrolled {
+  padding: 0.6rem 2rem;
+  border-bottom-color: var(--border);
+}
+.nav-logo {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--blue);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+}
+.nav-logo span { color: var(--purple); }
+.nav-links { display: flex; gap: 1.5rem; align-items: center; }
+.nav-links a {
+  color: var(--fg-dim);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--fg); }
+.nav-gh {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--white) !important;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem !important;
+  font-size: 0.82rem !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.nav-gh:hover {
+  border-color: var(--blue) !important;
+  box-shadow: 0 0 12px rgba(126,156,216,0.2);
+  color: var(--white) !important;
+}
+
+/* ============================================================
+   SECTION COMMON
+   ============================================================ */
+section {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 6rem 2rem;
+}
+.section-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  position: relative;
+}
+.section-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(126,156,216,0.4), transparent);
+  filter: blur(2px);
+}
+.section-title {
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.section-title::before {
+  content: '##';
+  color: var(--blue);
+  font-size: 1rem;
+  opacity: 0.7;
+}
+.section-sub {
+  color: var(--fg-dim);
+  font-size: 0.88rem;
+  margin-bottom: 2.5rem;
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+#hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6rem 2rem 4rem;
+  max-width: 100%;
+  position: relative;
+}
+
+/* radial glow behind hero */
+#hero::before {
+  content: '';
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 700px;
+  height: 400px;
+  background: radial-gradient(ellipse at center, rgba(126,156,216,0.07) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-logo {
+  animation: fadeIn 0.9s ease forwards;
+  opacity: 0;
+}
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+.hero-logo pre {
+  font-family: var(--font-code);
+  font-size: clamp(5.5px, 1.15vw, 13px);
+  line-height: 1.3;
+  color: var(--blue);
+  text-shadow: 0 0 20px rgba(126,156,216,0.35), 0 0 40px rgba(126,156,216,0.15);
+  letter-spacing: 0;
+  user-select: none;
+}
+
+.hero-sub {
+  margin-top: 1.4rem;
+  color: var(--fg-dim);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  animation: fadeIn 1.1s 0.2s ease forwards;
+  opacity: 0;
+}
+
+/* BADGES */
+.hero-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 1.4rem 0;
+  animation: fadeIn 1.1s 0.35s ease forwards;
+  opacity: 0;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: var(--font-code);
+  font-size: 0.7rem;
+  height: 20px;
+}
+.badge-label {
+  background: #555;
+  color: #fff;
+  padding: 0 7px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.badge-value {
+  padding: 0 7px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  color: var(--bg);
+  font-weight: 600;
+}
+.badge-green .badge-value  { background: var(--green); }
+.badge-yellow .badge-value { background: var(--yellow); }
+.badge-purple .badge-value { background: var(--purple); }
+.badge-blue .badge-value   { background: var(--blue); }
+
+/* INSTALL TABS */
+.install-block {
+  margin-top: 1.8rem;
+  width: 100%;
+  max-width: 620px;
+  animation: fadeIn 1.1s 0.5s ease forwards;
+  opacity: 0;
+}
+.install-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+.install-tab {
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  color: var(--fg-dim);
+  background: none;
+  border: none;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+  margin-bottom: -1px;
+}
+.install-tab:hover { color: var(--fg); }
+.install-tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.install-pane {
+  display: none;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 1rem 1.2rem;
+  position: relative;
+}
+.install-pane.active { display: flex; align-items: center; gap: 0.7rem; }
+.install-prompt { color: var(--green); font-family: var(--font-code); font-size: 0.88rem; flex-shrink: 0; }
+.install-cmd {
+  font-family: var(--font-code);
+  font-size: 0.82rem;
+  color: var(--white);
+  flex: 1;
+  text-align: left;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.copy-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  font-family: var(--font-code);
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.copy-btn:hover { color: var(--blue); border-color: var(--blue); }
+.copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+/* SCROLL DOWN */
+.scroll-down {
+  margin-top: 3rem;
+  color: var(--fg-dim);
+  font-size: 1.3rem;
+  animation: bob 2s ease-in-out infinite, fadeIn 1s 0.8s ease forwards;
+  opacity: 0;
+  cursor: default;
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(7px); }
+}
+
+/* ============================================================
+   FEATURES
+   ============================================================ */
+#features { background: var(--bg-dim); max-width: 100%; }
+#features > .inner { max-width: 1100px; margin: 0 auto; padding: 6rem 2rem; }
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 1.2rem;
+}
+.feat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem 1.4rem;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+  cursor: default;
+}
+.feat-card:hover {
+  transform: translateY(-3px);
+}
+.feat-card[data-color="yellow"]:hover { border-color: var(--yellow); box-shadow: 0 4px 24px rgba(192,163,110,0.12); }
+.feat-card[data-color="blue"]:hover   { border-color: var(--blue);   box-shadow: 0 4px 24px rgba(126,156,216,0.12); }
+.feat-card[data-color="purple"]:hover { border-color: var(--purple); box-shadow: 0 4px 24px rgba(149,127,184,0.12); }
+.feat-card[data-color="cyan"]:hover   { border-color: var(--cyan);   box-shadow: 0 4px 24px rgba(106,149,137,0.12); }
+.feat-card[data-color="green"]:hover  { border-color: var(--green);  box-shadow: 0 4px 24px rgba(152,187,108,0.12); }
+.feat-card[data-color="red"]:hover    { border-color: var(--red);    box-shadow: 0 4px 24px rgba(228,104,118,0.12); }
+.feat-card[data-color="orange"]:hover { border-color: var(--orange); box-shadow: 0 4px 24px rgba(255,160,102,0.12); }
+.feat-icon { font-size: 1.8rem; margin-bottom: 0.8rem; display: block; }
+.feat-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+.feat-card[data-color="yellow"] .feat-title { color: var(--yellow); }
+.feat-card[data-color="blue"]   .feat-title { color: var(--blue); }
+.feat-card[data-color="purple"] .feat-title { color: var(--purple); }
+.feat-card[data-color="cyan"]   .feat-title { color: var(--cyan); }
+.feat-card[data-color="green"]  .feat-title { color: var(--green); }
+.feat-card[data-color="red"]    .feat-title { color: var(--red); }
+.feat-card[data-color="orange"] .feat-title { color: var(--orange); }
+.feat-desc {
+  color: var(--fg);
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+.feat-desc code {
+  font-family: var(--font-code);
+  color: var(--yellow);
+  background: rgba(192,163,110,0.1);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-size: 0.82em;
+}
+
+/* ============================================================
+   PLUGINS
+   ============================================================ */
+.plugin-tabs-wrap {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+}
+.plugin-tab {
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg-dim);
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.plugin-tab:hover { color: var(--fg); border-color: var(--border-hi); }
+.plugin-tab.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--bg);
+  font-weight: 600;
+}
+.plugin-pane { display: none; }
+.plugin-pane.active { display: block; }
+.plugin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.plugin-table th {
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  color: var(--blue);
+  font-family: var(--font-head);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.plugin-table td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid rgba(45,43,41,0.6);
+}
+.plugin-table tr:last-child td { border-bottom: none; }
+.plugin-table tbody tr { transition: background 0.15s; }
+.plugin-table tbody tr:hover { background: rgba(126,156,216,0.05); }
+.plugin-table td:first-child {
+  font-family: var(--font-code);
+  color: var(--white);
+  font-size: 0.83rem;
+  white-space: nowrap;
+}
+.plugin-table td:last-child { color: var(--fg-dim); }
+
+/* ============================================================
+   KEYMAPS
+   ============================================================ */
+#keymaps { background: var(--bg-dim); max-width: 100%; }
+#keymaps > .inner { max-width: 1100px; margin: 0 auto; padding: 6rem 2rem; }
+
+.leader-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--yellow);
+  border-radius: 8px;
+  padding: 0.4rem 1rem;
+  margin-bottom: 2rem;
+  font-family: var(--font-code);
+  font-size: 0.85rem;
+  color: var(--yellow);
+  box-shadow: 0 0 12px rgba(192,163,110,0.1);
+}
+.leader-badge span { color: var(--fg-dim); font-size: 0.78rem; }
+
+.accordion-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 0.6rem;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.accordion-item.open { border-color: var(--border-hi); }
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--bg-card);
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-head);
+  font-size: 0.9rem;
+  color: var(--white);
+  transition: background 0.15s;
+}
+.accordion-header:hover { background: rgba(45,43,41,0.7); }
+.accordion-arrow {
+  color: var(--yellow);
+  font-size: 0.7rem;
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+}
+.accordion-item.open .accordion-arrow { transform: rotate(90deg); }
+.accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+.accordion-item.open .accordion-body { max-height: 1000px; }
+.keymap-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  padding: 0.4rem 0;
+}
+.keymap-table td {
+  padding: 0.45rem 1.1rem;
+  border-bottom: 1px solid rgba(45,43,41,0.5);
+}
+.keymap-table tr:last-child td { border-bottom: none; }
+.keymap-table tbody tr:hover { background: rgba(192,163,110,0.04); }
+.keymap-table td:first-child { width: 45%; }
+.key-badge {
+  display: inline-block;
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  color: var(--yellow);
+  background: var(--bg-dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1em 0.5em;
+  white-space: nowrap;
+}
+.keymap-table td:last-child { color: var(--fg); }
+
+/* ============================================================
+   INSTALLATION
+   ============================================================ */
+.install-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.2rem;
+}
+.install-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.install-card:hover { border-color: var(--border-hi); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+.install-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+.install-card-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--white);
+  font-size: 0.95rem;
+}
+.tag {
+  font-family: var(--font-code);
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0.15em 0.6em;
+  letter-spacing: 0.04em;
+}
+.tag-green { background: rgba(152,187,108,0.18); color: var(--green); border: 1px solid rgba(152,187,108,0.3); }
+.tag-red   { background: rgba(228,104,118,0.18); color: var(--red);   border: 1px solid rgba(228,104,118,0.3); }
+.install-card-desc {
+  color: var(--fg-dim);
+  font-size: 0.83rem;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+.code-block {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.8rem 1rem;
+  position: relative;
+}
+.code-block-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.code-prompt { color: var(--green); font-family: var(--font-code); font-size: 0.83rem; padding-top: 0.05em; flex-shrink: 0; }
+.code-text {
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+  color: var(--white);
+  flex: 1;
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.7;
+}
+.code-copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  font-family: var(--font-code);
+  transition: all 0.2s;
+}
+.code-copy:hover { color: var(--blue); border-color: var(--blue); }
+.code-copy.copied { color: var(--green); border-color: var(--green); }
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  color: var(--fg-dim);
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.footer-center { color: var(--fg-dim); }
+.footer-center span { color: var(--red); }
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--fg-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.footer-right:hover { color: var(--white); }
+.footer-right svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 768px) {
+  nav { padding: 0.8rem 1rem; }
+  .nav-links a:not(.nav-gh) { display: none; }
+  section { padding: 4rem 1.2rem; }
+  #features > .inner, #keymaps > .inner { padding: 4rem 1.2rem; }
+  .hero-logo pre { font-size: clamp(4px, 2.2vw, 9px); }
+  .features-grid { grid-template-columns: 1fr; }
+  .install-grid { grid-template-columns: 1fr; }
+  .plugin-table-wrap { overflow-x: auto; }
+  footer { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 480px) {
+  .hero-logo pre { font-size: clamp(3.5px, 1.8vw, 7.5px); }
+  .install-cmd { font-size: 0.72rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- PROGRESS BAR -->
+<div id="progress-bar"></div>
+
+<!-- NAV -->
+<nav id="nav">
+  <a href="#hero" class="nav-logo">Nazo<span>Vim</span></a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#plugins">Plugins</a>
+    <a href="#keymaps">Keymaps</a>
+    <a href="#install">Install</a>
+    <a href="https://github.com/nazozokc/nazozokc.nvim.config" target="_blank" rel="noopener" class="nav-gh">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+<section id="hero">
+  <div class="hero-logo reveal">
+    <pre>
+█   █  ███  █████  ███  █   █ ███ █   █
+██  █ █   █     █ █   █ █   █  █  ██ ██
+█ █ █ █   █    █  █   █ █   █  █  █ █ █
+█  ██ █████   █   █   █ █   █  █  █   █
+█   █ █   █  █    █   █  █ █   █  █   █
+█   █ █   █ █     █   █  █ █   █  █   █
+█   █ █   █ █████  ███    █   ███ █   █</pre>
+  </div>
+
+  <p class="hero-sub reveal" style="transition-delay:0.15s">a neovim distribution by nazozokc</p>
+
+  <div class="hero-badges reveal" style="transition-delay:0.25s">
+    <span class="badge badge-green"><span class="badge-label">CI</span><span class="badge-value">passing</span></span>
+    <span class="badge badge-yellow"><span class="badge-label">License</span><span class="badge-value">MIT</span></span>
+    <span class="badge badge-purple"><span class="badge-label">Neovim</span><span class="badge-value">0.10+</span></span>
+    <span class="badge badge-blue"><span class="badge-label">Nix</span><span class="badge-value">flake</span></span>
+  </div>
+
+  <div class="install-block reveal" style="transition-delay:0.35s">
+    <div class="install-tabs" role="tablist">
+      <button class="install-tab active" role="tab" aria-selected="true" data-target="tab-nixrun">nix run</button>
+      <button class="install-tab" role="tab" aria-selected="false" data-target="tab-nixdev">nix develop</button>
+      <button class="install-tab" role="tab" aria-selected="false" data-target="tab-clone">clone</button>
+    </div>
+    <div class="install-pane active" id="tab-nixrun" role="region" aria-label="nix run command">
+      <span class="install-prompt">❯</span>
+      <code class="install-cmd">nix run github:nazozokc/nazozokc.nvim.config</code>
+      <button class="copy-btn" data-copy="nix run github:nazozokc/nazozokc.nvim.config">📋 copy</button>
+    </div>
+    <div class="install-pane" id="tab-nixdev" role="region" aria-label="nix develop command">
+      <span class="install-prompt">❯</span>
+      <code class="install-cmd">nix develop github:nazozokc/nazozokc.nvim.config</code>
+      <button class="copy-btn" data-copy="nix develop github:nazozokc/nazozokc.nvim.config">📋 copy</button>
+    </div>
+    <div class="install-pane" id="tab-clone" role="region" aria-label="git clone command">
+      <span class="install-prompt">❯</span>
+      <code class="install-cmd">git clone https://github.com/nazozokc/nazozokc.nvim.config.git ~/.config/nvim</code>
+      <button class="copy-btn" data-copy="git clone https://github.com/nazozokc/nazozokc.nvim.config.git ~/.config/nvim">📋 copy</button>
+    </div>
+  </div>
+
+  <div class="scroll-down">↓</div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ============================================================
+     FEATURES
+     ============================================================ -->
+<div id="features-bg" style="background:var(--bg-dim)">
+<div id="features">
+  <div class="inner">
+    <h2 class="section-title reveal">Features</h2>
+    <p class="section-sub reveal" style="transition-delay:0.1s">Everything you need. Nothing you don't.</p>
+    <div class="features-grid">
+      <div class="feat-card reveal" data-color="yellow" style="transition-delay:0.05s">
+        <span class="feat-icon">⚡</span>
+        <div class="feat-title">Fast Startup</div>
+        <div class="feat-desc">lazy.nvim によるアグレッシブな遅延ロード。起動を邪魔するものは <code>VeryLazy</code> 以降に追いやる。</div>
+      </div>
+      <div class="feat-card reveal" data-color="blue" style="transition-delay:0.1s">
+        <span class="feat-icon">🔧</span>
+        <div class="feat-title">Full LSP</div>
+        <div class="feat-desc">TypeScript / Lua / Ruby / Nix / C / Java / Zig など多言語対応。mason + nixd の両刀構成。</div>
+      </div>
+      <div class="feat-card reveal" data-color="purple" style="transition-delay:0.15s">
+        <span class="feat-icon">🎨</span>
+        <div class="feat-title">Kanagawa</div>
+        <div class="feat-desc"><code>kanagawa-dragon</code> テーマ + 透明背景。ターミナルと完全に溶け込む洗練された見た目。</div>
+      </div>
+      <div class="feat-card reveal" data-color="cyan" style="transition-delay:0.2s">
+        <span class="feat-icon">🧠</span>
+        <div class="feat-title">AI Integration</div>
+        <div class="feat-desc">Claude Code と opencode を両方サポート。<code>claudecode.nvim</code> + <code>opencode.nvim</code>。</div>
+      </div>
+      <div class="feat-card reveal" data-color="blue" style="transition-delay:0.25s">
+        <span class="feat-icon">🌊</span>
+        <div class="feat-title">snacks.nvim</div>
+        <div class="feat-desc">Dashboard・Picker・Zen mode・セッション管理をひとつのプラグインで統一。</div>
+      </div>
+      <div class="feat-card reveal" data-color="green" style="transition-delay:0.3s">
+        <span class="feat-icon">📦</span>
+        <div class="feat-title">Nix Ready</div>
+        <div class="feat-desc"><code>nix run</code> で隔離起動。<code>nix develop</code> で LSP 完備の devShell。既存設定を汚さない。</div>
+      </div>
+      <div class="feat-card reveal" data-color="red" style="transition-delay:0.35s">
+        <span class="feat-icon">🐛</span>
+        <div class="feat-title">DAP Built-in</div>
+        <div class="feat-desc">JavaScript / TypeScript のデバッグ環境を最小構成で内包。<code>nvim-dap</code> + vscode-js-debug。</div>
+      </div>
+      <div class="feat-card reveal" data-color="orange" style="transition-delay:0.4s">
+        <span class="feat-icon">🔍</span>
+        <div class="feat-title">Fuzzy Finding</div>
+        <div class="feat-desc">snacks.nvim Picker (ivy layout) をメイン、Telescope をサブとして併用。快適な検索体験。</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- ============================================================
+     PLUGINS
+     ============================================================ -->
+<section id="plugins">
+  <h2 class="section-title reveal">Plugins</h2>
+  <p class="section-sub reveal" style="transition-delay:0.1s">Carefully curated. Aggressively lazy-loaded.</p>
+
+  <div class="plugin-tabs-wrap reveal" style="transition-delay:0.15s" role="tablist">
+    <button class="plugin-tab active" role="tab" aria-selected="true" data-ptarget="pt-lsp">LSP</button>
+    <button class="plugin-tab" role="tab" aria-selected="false" data-ptarget="pt-finder">Finder</button>
+    <button class="plugin-tab" role="tab" aria-selected="false" data-ptarget="pt-ui">UI</button>
+    <button class="plugin-tab" role="tab" aria-selected="false" data-ptarget="pt-git">Git</button>
+    <button class="plugin-tab" role="tab" aria-selected="false" data-ptarget="pt-editor">Editor</button>
+    <button class="plugin-tab" role="tab" aria-selected="false" data-ptarget="pt-ai">AI</button>
+  </div>
+
+  <div class="plugin-table-wrap reveal" style="transition-delay:0.2s; overflow-x:auto">
+    <div class="plugin-pane active" id="pt-lsp">
+      <table class="plugin-table">
+        <thead><tr><th>Plugin</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>nvim-lspconfig + mason</td><td>LSP management</td></tr>
+          <tr><td>typescript-tools.nvim</td><td>TypeScript LSP (optimized)</td></tr>
+          <tr><td>nvim-cmp</td><td>Completion engine</td></tr>
+          <tr><td>LuaSnip + denippet.vim</td><td>Snippets (VSCode-compatible)</td></tr>
+          <tr><td>lspsaga.nvim</td><td>LSP UI enhancements</td></tr>
+          <tr><td>conform.nvim</td><td>Formatter (stylua / prettier etc.)</td></tr>
+          <tr><td>fidget.nvim</td><td>LSP progress display</td></tr>
+          <tr><td>tiny-inline-diagnostic.nvim</td><td>Inline diagnostics</td></tr>
+          <tr><td>lazydev.nvim</td><td>Lua/Neovim API completion</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="plugin-pane" id="pt-finder">
+      <table class="plugin-table">
+        <thead><tr><th>Plugin</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>snacks.nvim</td><td>Picker / Dashboard / Zen / Session</td></tr>
+          <tr><td>telescope.nvim</td><td>Fuzzy finder (secondary)</td></tr>
+          <tr><td>oil.nvim</td><td>Buffer-based file explorer</td></tr>
+          <tr><td>neo-tree.nvim</td><td>Tree-style file explorer</td></tr>
+          <tr><td>yazi.nvim</td><td>yazi file manager integration</td></tr>
+          <tr><td>flash.nvim</td><td>Smart jump</td></tr>
+          <tr><td>aerial.nvim</td><td>Symbol outline</td></tr>
+          <tr><td>dropbar.nvim</td><td>Winbar / breadcrumbs</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="plugin-pane" id="pt-ui">
+      <table class="plugin-table">
+        <thead><tr><th>Plugin</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>kanagawa.nvim</td><td>Color scheme (dragon + transparent)</td></tr>
+          <tr><td>lualine.nvim</td><td>Status line</td></tr>
+          <tr><td>barbar.nvim</td><td>Tab bar</td></tr>
+          <tr><td>noice.nvim</td><td>Command line UI / notifications</td></tr>
+          <tr><td>modes.nvim</td><td>Mode-dependent cursor color</td></tr>
+          <tr><td>render-markdown.nvim</td><td>Rich Markdown rendering</td></tr>
+          <tr><td>nvim-highlight-colors</td><td>Inline color code preview</td></tr>
+          <tr><td>incline.nvim</td><td>Floating filename</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="plugin-pane" id="pt-git">
+      <table class="plugin-table">
+        <thead><tr><th>Plugin</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>gitsigns.nvim</td><td>Git diff sign column</td></tr>
+          <tr><td>diffview.nvim</td><td>Diff view / file history</td></tr>
+          <tr><td>lazygit.nvim</td><td>LazyGit integration</td></tr>
+          <tr><td>vim-fugitive</td><td>Git operations</td></tr>
+          <tr><td>octo.nvim</td><td>GitHub Issue / PR / Notification</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="plugin-pane" id="pt-editor">
+      <table class="plugin-table">
+        <thead><tr><th>Plugin</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>nvim-treesitter</td><td>Syntax highlight / indent</td></tr>
+          <tr><td>nvim-treesitter-textobjects</td><td>Function / class / argument textobjects</td></tr>
+          <tr><td>nvim-autopairs</td><td>Auto bracket completion</td></tr>
+          <tr><td>mini.ai / surround / comment</td><td>Textobjects / Surround / Comments</td></tr>
+          <tr><td>nvim-spider</td><td>CamelCase/snake_case w/e/b</td></tr>
+          <tr><td>dial.nvim</td><td>Extended C-a/C-x increment</td></tr>
+          <tr><td>which-key.nvim</td><td>Keymap help</td></tr>
+          <tr><td>toggleterm.nvim</td><td>Floating terminal</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="plugin-pane" id="pt-ai">
+      <table class="plugin-table">
+        <thead><tr><th>Plugin</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>claudecode.nvim</td><td>Claude Code integration</td></tr>
+          <tr><td>opencode.nvim</td><td>opencode integration</td></tr>
+          <tr><td>CopilotChat.nvim</td><td>GitHub Copilot Chat</td></tr>
+          <tr><td>copilot.lua</td><td>GitHub Copilot completion</td></tr>
+          <tr><td>nvim-dap + nvim-dap-ui</td><td>Debugger</td></tr>
+          <tr><td>neotest</td><td>Test runner (jest / vitest / playwright)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ============================================================
+     KEYMAPS
+     ============================================================ -->
+<div style="background:var(--bg-dim)">
+<div id="keymaps">
+  <div class="inner">
+    <h2 class="section-title reveal">Keymaps</h2>
+    <p class="section-sub reveal" style="transition-delay:0.1s">Thoughtfully mapped. Muscle-memory ready.</p>
+
+    <div class="leader-badge reveal" style="transition-delay:0.15s">
+      &lt;Leader&gt; <span>= Space</span>
+    </div>
+
+    <!-- General -->
+    <div class="accordion-item open reveal" style="transition-delay:0.2s">
+      <div class="accordion-header" aria-expanded="true" onclick="toggleAccordion(this)">
+        <span class="accordion-arrow">▶</span>
+        <span>General</span>
+      </div>
+      <div class="accordion-body">
+        <table class="keymap-table">
+          <tbody>
+            <tr><td><span class="key-badge">&lt;Leader&gt;&lt;Leader&gt;</span></td><td>File search (snacks Picker)</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;g</span></td><td>Live Grep</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;b</span></td><td>Buffer list</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;r</span></td><td>Recent files</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;h</span></td><td>Clear search highlight</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;z</span></td><td>Zen mode</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;m</span></td><td>Oil file explorer</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;n</span></td><td>Neo-tree</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;t</span></td><td>Floating terminal</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;f</span></td><td>Format buffer</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LSP -->
+    <div class="accordion-item reveal" style="transition-delay:0.25s">
+      <div class="accordion-header" aria-expanded="false" onclick="toggleAccordion(this)">
+        <span class="accordion-arrow">▶</span>
+        <span>LSP</span>
+      </div>
+      <div class="accordion-body">
+        <table class="keymap-table">
+          <tbody>
+            <tr><td><span class="key-badge">K</span></td><td>Hover</td></tr>
+            <tr><td><span class="key-badge">gd</span></td><td>Go to definition</td></tr>
+            <tr><td><span class="key-badge">ga</span></td><td>Code action (Lspsaga)</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;ca</span></td><td>Code action (preview)</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;gr</span></td><td>References</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;oi</span></td><td>Organize imports (TS)</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;ru</span></td><td>Remove unused (TS)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Git -->
+    <div class="accordion-item reveal" style="transition-delay:0.3s">
+      <div class="accordion-header" aria-expanded="false" onclick="toggleAccordion(this)">
+        <span class="accordion-arrow">▶</span>
+        <span>Git</span>
+      </div>
+      <div class="accordion-body">
+        <table class="keymap-table">
+          <tbody>
+            <tr><td><span class="key-badge">&lt;Leader&gt;gd</span></td><td>DiffviewOpen</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;gh</span></td><td>File history</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;gH</span></td><td>Branch history</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;gc</span></td><td>Diffview Close</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;gp</span></td><td>Preview hunk</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;gt</span></td><td>Blame toggle</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AI -->
+    <div class="accordion-item reveal" style="transition-delay:0.35s">
+      <div class="accordion-header" aria-expanded="false" onclick="toggleAccordion(this)">
+        <span class="accordion-arrow">▶</span>
+        <span>AI</span>
+      </div>
+      <div class="accordion-body">
+        <table class="keymap-table">
+          <tbody>
+            <tr><td><span class="key-badge">&lt;Leader&gt;ac</span></td><td>Toggle Claude Code</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;af</span></td><td>Focus Claude Code</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;ab</span></td><td>Add current buffer</td></tr>
+            <tr><td><span class="key-badge">&lt;C-a&gt;</span></td><td>opencode ask</td></tr>
+            <tr><td><span class="key-badge">&lt;C-x&gt;</span></td><td>opencode select action</td></tr>
+            <tr><td><span class="key-badge">&lt;C-.&gt;</span></td><td>opencode toggle</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DAP -->
+    <div class="accordion-item reveal" style="transition-delay:0.4s">
+      <div class="accordion-header" aria-expanded="false" onclick="toggleAccordion(this)">
+        <span class="accordion-arrow">▶</span>
+        <span>DAP</span>
+      </div>
+      <div class="accordion-body">
+        <table class="keymap-table">
+          <tbody>
+            <tr><td><span class="key-badge">&lt;F5&gt;</span></td><td>Continue</td></tr>
+            <tr><td><span class="key-badge">&lt;F10&gt;</span></td><td>Step over</td></tr>
+            <tr><td><span class="key-badge">&lt;F11&gt;</span></td><td>Step into</td></tr>
+            <tr><td><span class="key-badge">&lt;F12&gt;</span></td><td>Step out</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;db</span></td><td>Toggle breakpoint</td></tr>
+            <tr><td><span class="key-badge">&lt;Leader&gt;du</span></td><td>DAP UI toggle</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Window / Buffer -->
+    <div class="accordion-item reveal" style="transition-delay:0.45s">
+      <div class="accordion-header" aria-expanded="false" onclick="toggleAccordion(this)">
+        <span class="accordion-arrow">▶</span>
+        <span>Window / Buffer</span>
+      </div>
+      <div class="accordion-body">
+        <table class="keymap-table">
+          <tbody>
+            <tr><td><span class="key-badge">&lt;C-h/j/k/l&gt;</span></td><td>Window navigation (tmux-aware)</td></tr>
+            <tr><td><span class="key-badge">&lt;C-PageDown/Up&gt;</span></td><td>Buffer switch</td></tr>
+            <tr><td><span class="key-badge">&lt;C-t&gt;</span></td><td>New buffer</td></tr>
+            <tr><td><span class="key-badge">&lt;C-q&gt;</span></td><td>Close buffer</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- ============================================================
+     INSTALLATION
+     ============================================================ -->
+<section id="install">
+  <h2 class="section-title reveal">Installation</h2>
+  <p class="section-sub reveal" style="transition-delay:0.1s">Pick your method. Start editing in minutes.</p>
+
+  <div class="install-grid">
+    <!-- Method 1 -->
+    <div class="install-card reveal" style="transition-delay:0.1s">
+      <div class="install-card-head">
+        <div class="install-card-title">Method 1 — nix run</div>
+        <span class="tag tag-green">RECOMMENDED</span>
+      </div>
+      <p class="install-card-desc">設定を <code style="font-family:var(--font-code);color:var(--yellow);font-size:0.82em">~/.config/nvim-nazozokc</code> に隔離展開。既存の Neovim 設定を一切汚さない。</p>
+      <div class="code-block">
+        <div class="code-block-inner">
+          <span class="code-prompt">❯</span>
+          <code class="code-text">nix run github:nazozokc/nazozokc.nvim.config</code>
+        </div>
+        <button class="code-copy" data-copy="nix run github:nazozokc/nazozokc.nvim.config">copy</button>
+      </div>
+    </div>
+
+    <!-- Method 2 -->
+    <div class="install-card reveal" style="transition-delay:0.2s">
+      <div class="install-card-head">
+        <div class="install-card-title">Method 2 — nix develop</div>
+      </div>
+      <p class="install-card-desc">LSP とフォーマッターが揃った devShell に入る。<code style="font-family:var(--font-code);color:var(--yellow);font-size:0.82em">NVIM_APPNAME</code> が自動でセットされる。</p>
+      <div class="code-block">
+        <div class="code-block-inner">
+          <span class="code-prompt">❯</span>
+          <code class="code-text">nix develop github:nazozokc/nazozokc.nvim.config
+nvim</code>
+        </div>
+        <button class="code-copy" data-copy="nix develop github:nazozokc/nazozokc.nvim.config">copy</button>
+      </div>
+    </div>
+
+    <!-- Method 3 -->
+    <div class="install-card reveal" style="transition-delay:0.3s">
+      <div class="install-card-head">
+        <div class="install-card-title">Method 3 — git clone</div>
+        <span class="tag tag-red">OVERWRITES ~/.config/nvim</span>
+      </div>
+      <p class="install-card-desc">Nix 不要。初回起動時に lazy.nvim が全プラグインを自動インストール。バックアップ推奨。</p>
+      <div class="code-block">
+        <div class="code-block-inner">
+          <span class="code-prompt">❯</span>
+          <code class="code-text">git clone https://github.com/nazozokc/
+  nazozokc.nvim.config.git ~/.config/nvim
+nvim</code>
+        </div>
+        <button class="code-copy" data-copy="git clone https://github.com/nazozokc/nazozokc.nvim.config.git ~/.config/nvim">copy</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- FOOTER -->
+<footer>
+  <span>MIT © nazozokc 2026</span>
+  <span class="footer-center">built with <span>❤</span> and too many plugins</span>
+  <a href="https://github.com/nazozokc" target="_blank" rel="noopener" class="footer-right">
+    <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    github.com/nazozokc
+  </a>
+</footer>
+
+<script>
+// ============================================================
+// PROGRESS BAR
+// ============================================================
+const progressBar = document.getElementById('progress-bar');
+window.addEventListener('scroll', () => {
+  const scrolled = window.scrollY;
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  progressBar.style.width = (scrolled / total * 100) + '%';
+});
+
+// ============================================================
+// NAV SHRINK
+// ============================================================
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 50);
+}, { passive: true });
+
+// ============================================================
+// INTERSECTION OBSERVER — reveal
+// ============================================================
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ============================================================
+// HERO INSTALL TABS
+// ============================================================
+document.querySelectorAll('.install-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.target;
+    document.querySelectorAll('.install-tab').forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.install-pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    document.getElementById(target).classList.add('active');
+  });
+});
+
+// ============================================================
+// PLUGIN TABS
+// ============================================================
+document.querySelectorAll('.plugin-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.ptarget;
+    document.querySelectorAll('.plugin-tab').forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.plugin-pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    document.getElementById(target).classList.add('active');
+  });
+});
+
+// ============================================================
+// ACCORDION
+// ============================================================
+function toggleAccordion(header) {
+  const item = header.closest('.accordion-item');
+  const isOpen = item.classList.contains('open');
+  item.classList.toggle('open', !isOpen);
+  header.setAttribute('aria-expanded', !isOpen);
+}
+
+// ============================================================
+// COPY BUTTONS
+// ============================================================
+function setupCopyButtons() {
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = btn.dataset.copy;
+      try {
+        await navigator.clipboard.writeText(text);
+        const orig = btn.textContent;
+        btn.textContent = btn.classList.contains('copy-btn') ? '✓ copied!' : 'copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('copied');
+        }, 2000);
+      } catch {}
+    });
+  });
+}
+setupCopyButtons();
+</script>
+</body>
+</html>
